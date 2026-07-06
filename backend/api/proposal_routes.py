@@ -1,58 +1,80 @@
 # backend/api/proposal_routes.py
-import os
-import shutil
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import ProposalEvaluation
-from backend.services.document_parser import DocumentParser
+from backend.services.document_parser import extract_text_from_pdf
+from backend.services.evaluation_pipeline import EvaluationPipeline
+import shutil
+import os
 
 router = APIRouter(prefix="/api/proposals", tags=["Proposals"])
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+pipeline = EvaluationPipeline()
 
 @router.post("/upload")
-async def upload_proposal(
+async def upload_and_evaluate_proposal(
     file: UploadFile = File(...),
-    budget: float = Form(None),
+    budget: float = Form(...),
     db: Session = Depends(get_db)
 ):
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Invalid format. Only PDF files are allowed.")
-        
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    """
+    Receives a proposal file via form data, extracts text content, 
+    evaluates features using the ML engine, and saves to the database.
+    """
+    upload_dir = "data/uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, file.filename)
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
     try:
-        raw_text = DocumentParser.extract_text_from_pdf(file_path)
-        parsed_sections = DocumentParser.parse_sections(raw_text)
-        
-        new_evaluation = ProposalEvaluation(
-            title=file.filename.replace(".pdf", ""),
-            pdf_filename=file.filename,
-            budget=budget,
-            status="Processing"
-        )
-        
-        db.add(new_evaluation)
-        db.commit()
-        db.refresh(new_evaluation)
-        
-        return {
-            "message": "Proposal uploaded and text parsed successfully.",
-            "proposal_id": new_evaluation.id,
-            "detected_sections": {
-                "abstract_length": len(parsed_sections["abstract"]),
-                "methodology_length": len(parsed_sections["methodology"]),
-                "budget_segment_length": len(parsed_sections["budget_details"])
-            }
-        }
-        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
     except Exception as e:
-        # Cleanup file if writing data metrics crashes
+        raise HTTPException(status_code=500, detail=f"Failed to cache file on server disk: {str(e)}")
+
+    try:
+        extracted_text = extract_text_from_pdf(file_path)
+    except Exception as e:
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"Parsing Engine failure: {str(e)}")
+        raise HTTPException(status_code=422, detail=f"Document parsing failure: {str(e)}")
+
+    try:
+        evaluation_results = pipeline.evaluate_incoming_proposal(extracted_text, budget)
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"ML Pipeline execution failure: {str(e)}")
+
+    try:
+        conf = evaluation_results["evaluation_verdict"]["confidence_percentage"]
+        
+        new_proposal = ProposalEvaluation(
+            title=file.filename.rsplit('.', 1)[0],
+            pdf_filename=file.filename,
+            budget=budget,
+            
+            final_score=evaluation_results["metrics"]["novelty_score"], 
+            
+            lower_confidence=round(max(0.0, conf - 5.0), 2),
+            upper_confidence=round(min(100.0, conf + 5.0), 2),
+            
+            status="Completed" 
+        )
+        
+        db.add(new_proposal)
+        db.commit()
+        db.refresh(new_proposal)
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database persistent commit failure: {str(e)}")
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    return {
+        "proposal_id": new_proposal.id,
+        "title": new_proposal.title,
+        "analysis": evaluation_results
+    }

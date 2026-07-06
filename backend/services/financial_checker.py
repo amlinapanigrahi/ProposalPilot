@@ -1,5 +1,3 @@
-# backend/services/financial_checker.py
-
 class FinancialChecker:
     @staticmethod
     def evaluate_budget_feasibility(budget: float, proposal_text: str) -> dict:
@@ -23,18 +21,15 @@ class FinancialChecker:
                 base_score -= 20
                 risk_flags.append("High capital request missing matching equipment/infrastructure itemization.")
                 
-        # Heuristic 2: Check for duration matching context
         if "year" not in lower_text and "month" not in lower_text:
             base_score -= 15
             risk_flags.append("Project execution timeline/duration boundaries not clearly declared in text.")
             
-        # Heuristic 3: Check for disproportionately high prototyping costs
         if budget > 5000000:  # > 50 Lakhs
             if "scalability" not in lower_text and "pilot" not in lower_text:
                 base_score -= 15
                 risk_flags.append("Enterprise scale funding request lacking pilot execution or scalability strategies.")
                 
-        # Classify the adjusted score bounds
         if base_score >= 80:
             rating = "Highly Feasible"
         elif base_score >= 50:

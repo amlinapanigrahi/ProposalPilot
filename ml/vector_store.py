@@ -1,52 +1,54 @@
 import os
 import pandas as pd
 import numpy as np
-from ml.embedding_model import EmbeddingEngine
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 class LocalVectorStore:
     def __init__(self, csv_path: str = "data/past_projects.csv"):
         self.csv_path = csv_path
-        self.encoder = EmbeddingEngine()
-        self.past_embeddings = []
-        self.past_metadata = []
-        self.load_and_index_history()
+        self.vectorizer = TfidfVectorizer(stop_words="english")
+        self.past_titles = []
+        self.load_history()
 
-    def load_and_index_history(self):
-        """Reads the CSV file data source and caches its vector footprints."""
-        if not os.path.exists(self.csv_path):
+    def load_history(self):
+        """Loads historical projects from the CSV file to use as the comparison baseline."""
+        if not os.path.exists(self.csv_path) or os.stat(self.csv_path).st_size == 0:
             return
             
-        df = pd.read_csv(self.csv_path)
-        for _, row in df.iterrows():
-            text_to_embed = f"{row['title']}. {row['abstract']}"
-            vector = self.encoder.get_embeddings(text_to_embed)
-            
-            self.past_embeddings.append(vector)
-            self.past_metadata.append({
-                "id": row["id"],
-                "title": row["title"],
-                "approved": row["approved"]
-            })
-            
-        if self.past_embeddings:
-            self.past_embeddings = np.array(self.past_embeddings)
+        try:
+            df = pd.read_csv(self.csv_path)
+            if "project" in df.columns:
+                self.past_titles = df["project"].fillna("").tolist()
+            elif "title" in df.columns:
+                self.past_titles = df["title"].fillna("").tolist()
+        except Exception:
+            self.past_titles = []
 
     def compute_novelty_score(self, target_text: str) -> float:
-        """
-        Calculates a novelty metric from 0 to 100.
-        100 means completely unique; 0 means a direct carbon-copy duplicate.
-        """
-        if len(self.past_embeddings) == 0:
+        """Calculates a novelty metric from 0 to 100 using TF-IDF token matching."""
+        if not self.past_titles:
             return 100.0
 
-        target_vector = self.encoder.get_embeddings(target_text)
-        
-        dot_products = np.dot(self.past_embeddings, target_vector)
-        norm_history = np.linalg.norm(self.past_embeddings, axis=1)
-        norm_target = np.linalg.norm(target_vector)
-        
-        similarities = dot_products / (norm_history * norm_target + 1e-8)
-        max_similarity = float(np.max(similarities))
+        documents = self.past_titles + [target_text]
+        tfidf_matrix = self.vectorizer.fit_transform(documents)
+        similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1]).flatten()
+        max_similarity = float(np.max(similarities)) if len(similarities) > 0 else 0.0
         
         novelty_score = (1.0 - max_similarity) * 100.0
-        return max(0.0, min(100.0, novelty_score))
+        return round(max(0.0, min(100.0, novelty_score)), 2)
+
+    def extract_top_keywords(self, target_text: str, top_n: int = 5) -> list:
+        """
+        Extracts the highest-scoring TF-IDF words from the target text
+        to profile the core themes of the proposal.
+        """
+        try:
+            tfidf_matrix = self.vectorizer.transform([target_text])
+            feature_names = np.array(self.vectorizer.get_feature_names_out())
+            
+            sorted_output_indices = np.argsort(tfidf_matrix.toarray()[0])[::-1]
+            top_words = feature_names[sorted_output_indices[:top_n]].tolist()
+            return top_words
+        except Exception:
+            return ["analysis", "proposal", "research", "system", "framework"]
