@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database import Base
 from pydantic import BaseModel
 from typing import List, Dict
@@ -19,7 +19,7 @@ class ProposalEvaluation(Base):
     report_pdf_path = Column(String, nullable=True)
     status = Column(String, default="Pending")        # Pending, Processing, Completed, Failed
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class MetricScores(BaseModel):
     novelty_score: float

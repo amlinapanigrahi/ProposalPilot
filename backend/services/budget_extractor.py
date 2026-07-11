@@ -7,10 +7,10 @@ def extract_budget_from_text(proposal_text: str):
     """
     budget_values = []
 
-    # This pattern catches: ₹500000, INR 5,00,000, Rs. 3.5 lakh, Rs 5 Lakhs
-    pattern = r"(?:₹|INR|Rs\.?)\s?([\d,]+\.?\d*)\s?(lakh)?s?"
+    # This pattern catches: ₹500000, INR 5,00,000, Rs. 3.5 lakh, Rs 5 Lakhs, also crores 
+    pattern = r"(?:₹|INR|Rs\.?)\s?([\d,]+\.?\d*)\s?(lakh|crore)?s?"
 
-    # Find all matches (case-insensitive to catch 'lakh' or 'Lakh')
+    # Find all matches (case-insensitive)
     matches = re.findall(pattern, proposal_text, re.IGNORECASE)
 
     for number_part, lakh_part in matches:
