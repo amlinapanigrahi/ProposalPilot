@@ -24,19 +24,40 @@ TECHNICAL_EXEMPLARS = [
 
     "We design a randomized controlled trial with stratified sampling across "
     "three cohorts, using a mixed-effects regression model to control for "
-    "confounding variables and establish statistical significance.",
+    "confounding variables and establish statistical significance."
+]
 
-    "The proposed sensor fusion framework combines Kalman filtering with a "
-    "learned correction model, evaluated against ground-truth trajectories "
-    "using root-mean-square error as the primary metric.",
+# Reference snippets for financial feasibility sub-checks. Each represents
+# proposal language that properly addresses that dimension — similarity to
+# these, not keyword presence, is the signal.
 
-    "Our methodology applies finite element analysis to model structural stress "
-    "distribution under cyclic loading, with results validated against "
-    "physical prototype testing at three load thresholds.",
+EQUIPMENT_EXEMPLARS = [
+    "The requested funds will procure a GPU compute cluster, laboratory "
+    "instrumentation, and sensor hardware, itemized in the attached budget "
+    "breakdown with per-unit costs and vendor quotes.",
+    "Capital expenditure covers specialized microscopy equipment and a "
+    "dedicated server rack, with itemized costs detailed by category.",
+    "The budget allocates funds toward acquiring a robotic testbed, "
+    "calibration instruments, and associated maintenance contracts.",
+]
 
-    "We implement a differentially private aggregation scheme with formally "
-    "bounded epsilon-delta guarantees, benchmarked against standard "
-    "federated learning baselines on held-out data.",
+TIMELINE_EXEMPLARS = [
+    "The project spans 18 months, structured into three sequential "
+    "six-month phases: design, implementation, and validation.",
+    "Work will be completed over a 24-month period, with quarterly "
+    "milestones and a mid-project review at month 12.",
+    "The proposed timeline covers two years, beginning with a three-month "
+    "planning phase followed by iterative development sprints.",
+]
+
+SCALABILITY_EXEMPLARS = [
+    "A six-month pilot deployment with 200 users will precede full-scale "
+    "rollout, allowing iterative refinement before broader adoption.",
+    "The system will first be validated at small scale in a single "
+    "facility, with a defined scalability plan for expansion to "
+    "additional sites pending pilot results.",
+    "We propose a phased scale-up strategy: initial proof-of-concept, "
+    "followed by a limited pilot, followed by enterprise-wide deployment.",
 ]
 
 
@@ -46,6 +67,9 @@ class LocalVectorStore:
 
         self.novelty_vectorizer = TfidfVectorizer(stop_words="english")
         self.technical_vectorizer = TfidfVectorizer(stop_words="english")
+        self.equipment_vectorizer = TfidfVectorizer(stop_words="english")
+        self.timeline_vectorizer = TfidfVectorizer(stop_words="english")
+        self.scalability_vectorizer = TfidfVectorizer(stop_words="english")
 
         self.corpus_titles = []      # for display in similar_past_projects
         self.corpus_documents = []   # title + abstract, used for similarity
@@ -53,30 +77,33 @@ class LocalVectorStore:
 
         self.load_history()
         self._fit_technical_corpus()
+        self._fit_financial_corpora()
 
     def load_history(self):
         """Loads past projects (title + abstract) as the novelty comparison baseline."""
         if not os.path.exists(self.csv_path) or os.stat(self.csv_path).st_size == 0:
-            print(f"[LocalVectorStore] No past_projects.csv found at {self.csv_path}, "
+            print(f"No past_projects.csv, "
                   f"novelty scoring will default to 100.")
             return
 
         try:
             df = pd.read_csv(self.csv_path)
 
+            #fetch title from csv file
             if "title" in df.columns:
-                titles = df["title"].fillna("")
+                titles = df["titles"].fillna("")
             else:
-                titles = pd.Series([""] * len(df))
+                titles = pd.Series([""]*len(df))
 
-            if "abstracts" in df.columns:
-                abstracts = df["abstracts"].fillna("")
+            #fetch abstract from csv file
+            if "abstract" in df.columns:
+                abstract = df["abstract"].fillna("")
             else:
-                abstracts = pd.Series([""] * len(df))
-            
+                abstract = pd.Series([""]*len(df))
+         
 
             self.corpus_titles = titles.tolist()
-            self.corpus_documents = (titles + ". " + abstracts).tolist()
+            self.corpus_documents = (titles + ". " + abstract).tolist()
 
             if self.corpus_documents:
                 self.novelty_matrix = self.novelty_vectorizer.fit_transform(self.corpus_documents)
@@ -87,29 +114,59 @@ class LocalVectorStore:
             self.corpus_documents = []
             self.novelty_matrix = None
 
+    #fit and transform technical examplars
     def _fit_technical_corpus(self):
-        """Fits a separate vectorizer against curated strong-technical-writing exemplars."""
         self.technical_matrix = self.technical_vectorizer.fit_transform(TECHNICAL_EXEMPLARS)
 
+    #fit and transform financial examplars
+    def _fit_financial_corpora(self):
+        self.equipment_matrix = self.equipment_vectorizer.fit_transform(EQUIPMENT_EXEMPLARS)
+        self.timeline_matrix = self.timeline_vectorizer.fit_transform(TIMELINE_EXEMPLARS)
+        self.scalability_matrix = self.scalability_vectorizer.fit_transform(SCALABILITY_EXEMPLARS)
+
+    #runs novelty/techncial/financial analysis
     def analyze(self, target_text: str, top_n_similar: int = 3, top_n_keywords: int = 5) -> dict:
 
-        novelty_vec = (
-            self.novelty_vectorizer.transform([target_text])
-            if self.novelty_matrix is not None else None
-        )
-
+        #transform target text into novelty vector
+        novelty_vec = self.novelty_vectorizer.transform([target_text])
+    
         technical_vec = self.technical_vectorizer.transform([target_text])
 
         return {
             "novelty_score": self._novelty_from_vec(novelty_vec),
-            "technical_alignment": self._technical_from_vec(technical_vec),
+            "technical_alignment": self._corpus_similarity_from_vec(technical_vec, self.technical_matrix),
             "similar_projects": self._top_similar_from_vec(novelty_vec, top_n_similar),
             "top_keywords": self._keywords_from_vec(novelty_vec, top_n_keywords),
         }
 
-    
+    def compute_financial_context_scores(self, target_text: str) -> dict:
+        #return financial context scores relating to equipment, timeline and scalability
+        return {
+            "equipment_justification_score": self._corpus_similarity(
+                target_text, self.equipment_vectorizer, self.equipment_matrix
+            ),
+            "timeline_clarity_score": self._corpus_similarity(
+                target_text, self.timeline_vectorizer, self.timeline_matrix
+            ),
+            "scalability_score": self._corpus_similarity(
+                target_text, self.scalability_vectorizer, self.scalability_matrix
+            ),
+        }
+
+    def _corpus_similarity(self, target_text: str, vectorizer, matrix) -> float:
+        """Mean of the top-k cosine similarities against the reference corpus."""
+        target_vec = vectorizer.transform([target_text])
+        similarities = cosine_similarity(target_vec, matrix).flatten()
+
+        k = min(3, len(similarities))
+        top_k = np.sort(similarities)[-k:] if k > 0 else similarities
+
+        score = float(np.mean(top_k)) * 100.0 if len(top_k) > 0 else 0.0
+        return round(max(0.0, min(100.0, score)), 2)
+
+   #NOVELTY CALCULATION FROM VECTOR
     def _novelty_from_vec(self, target_vec) -> float:
-        """0-100: higher = less similar to any past proposal (more novel)."""
+        #0-100: higher = less similar to any past proposal (more novel).
         if target_vec is None or not self.corpus_documents:
             return 100.0
 
@@ -118,15 +175,6 @@ class LocalVectorStore:
 
         novelty_score = (1.0 - max_similarity) * 100.0
         return round(max(0.0, min(100.0, novelty_score)), 2)
-
-    def _technical_from_vec(self, target_vec) -> float:
-        """0-100: higher = more similar to strong technical-writing exemplars."""
-        similarities = cosine_similarity(target_vec, self.technical_matrix).flatten()
-
-        # Mean of top-3 exemplar
-        top_k = np.sort(similarities)[-3:] if len(similarities) >= 3 else similarities
-        alignment_score = float(np.mean(top_k)) * 100.0
-        return round(max(0.0, min(100.0, alignment_score)), 2)
 
     def _top_similar_from_vec(self, target_vec, top_n: int) -> list:
         """Most similar past proposals with similarity scores.

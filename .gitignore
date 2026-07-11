@@ -1,3 +1,7 @@
+# Environment variables — contains GEMINI_API_KEY, must never be committed
+.env
+.env.local
+
 # Virtual Environment
 venv/
 ENV/
@@ -11,6 +15,12 @@ __pycache__/
 # Local Databases
 *.db
 *.sqlite3
+
+#uploaded proposals
+data/uploads/
+
+# Trained model artifact 
+ml/artifacts/*.pkl
 
 # OS generated files
 .DS_Store
