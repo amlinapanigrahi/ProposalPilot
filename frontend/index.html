@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ProposalPilot — AI-powered research proposal evaluation and technical audit terminal." />
+  <title>ProposalPilot — Proposal Evaluation</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:wght@400;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== VIEW 1 — INTAKE ===== -->
+  <main id="intake-view" class="intake-view" aria-label="Proposal intake form">
+    <header class="masthead">
+      <h1 class="masthead__title">ProposalPilot</h1>
+      <p class="masthead__tagline">An AI-assisted evaluation instrument for research proposals</p>
+      <p class="masthead__description">Upload a proposal to receive a structured review — novelty scoring, financial feasibility, technical alignment, and per-proposal SHAP explainability, generated in seconds.</p>
+    </header>
+
+    <div class="intake-panel">
+      <form id="upload-form" novalidate>
+        <!-- File drop zone -->
+        <div
+          id="drop-zone"
+          class="drop-zone"
+          role="button"
+          tabindex="0"
+          aria-label="Upload proposal PDF. Drag and drop a file here or click to browse."
+        >
+          <p class="drop-zone__prompt" id="drop-zone-prompt">
+            Drop proposal PDF here or <span class="drop-zone__browse">click to browse</span>
+          </p>
+          <input
+            type="file"
+            id="file-input"
+            accept=".pdf,application/pdf"
+            class="drop-zone__input"
+            aria-label="Select PDF file"
+          />
+        </div>
+
+        <!-- Budget field -->
+        <div class="field">
+          <label for="budget-input" class="field__label">Requested Budget (INR)</label>
+          <input
+            type="number"
+            id="budget-input"
+            class="field__input"
+            placeholder="e.g. 2500000"
+            min="1"
+            step="any"
+          />
+        </div>
+
+        <!-- Validation / error message -->
+        <p id="form-error" class="form-error" role="alert" aria-live="assertive"></p>
+
+        <!-- Submit -->
+        <button type="submit" id="submit-btn" class="submit-btn">Submit for Review</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- ===== VIEW 2 — CASE FILE ===== -->
+  <main id="casefile-view" class="casefile-view" aria-label="Evaluation case file" hidden>
+    <div class="casefile-container">
+
+      <!-- Header + Verdict Bar -->
+      <header class="casefile-header">
+        <h1 id="proposal-title" class="casefile-title"></h1>
+        <p id="proposal-meta" class="casefile-meta"></p>
+        <div id="verdict-bar" class="verdict-bar" role="status" aria-label="Evaluation verdict"></div>
+      </header>
+
+      <!-- 01 — Scores -->
+      <section class="exhibit" aria-labelledby="exhibit-1-heading">
+        <h2 id="exhibit-1-heading" class="exhibit__heading"><span class="exhibit__number">01</span> · Quantitative Scores</h2>
+        <div id="scores-grid" class="scores-grid"></div>
+      </section>
+
+      <!-- 02 — Financial Risk -->
+      <section class="exhibit" aria-labelledby="exhibit-2-heading">
+        <h2 id="exhibit-2-heading" class="exhibit__heading"><span class="exhibit__number">02</span> · Financial Risk</h2>
+        <ul id="risk-flags-list" class="risk-flags-list"></ul>
+      </section>
+
+      <!-- 03 — SHAP Attribution -->
+      <section class="exhibit" aria-labelledby="exhibit-3-heading">
+        <h2 id="exhibit-3-heading" class="exhibit__heading"><span class="exhibit__number">03</span> · Attribution (SHAP)</h2>
+        <p class="exhibit__methodology" id="shap-methodology"></p>
+        <div id="shap-bars" class="shap-bars"></div>
+      </section>
+
+      <!-- 04 — Comparable Precedent -->
+      <section class="exhibit" aria-labelledby="exhibit-4-heading">
+        <h2 id="exhibit-4-heading" class="exhibit__heading"><span class="exhibit__number">04</span> · Comparable Precedent</h2>
+        <div id="similar-projects" class="similar-projects"></div>
+      </section>
+
+      <!-- 05 — AI-Generated Assessment -->
+      <section class="exhibit" aria-labelledby="exhibit-5-heading">
+        <h2 id="exhibit-5-heading" class="exhibit__heading"><span class="exhibit__number">05</span> · AI-Generated Assessment</h2>
+        <div id="narrative-panel" class="narrative-panel"></div>
+      </section>
+
+      <!-- Reset -->
+      <div class="casefile-footer">
+        <button id="new-eval-btn" class="new-eval-btn">← New Evaluation</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
