@@ -14,7 +14,7 @@ class GeminiExplainer:
                 f"include: {', '.join(extracted_keywords)}. Highly recommended for priority human review."
             )
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
 
         prompt = (
             f"You are an expert technical risk auditor evaluating an R&D proposal titled '{proposal_title}'.\n"
@@ -29,7 +29,7 @@ class GeminiExplainer:
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
         try:
-            response = requests.post(url, json=payload, timeout=25)
+            response = requests.post(url, json=payload, timeout=30)
         except Exception as e:
             print(f"\n[Gemini Network Exception] {str(e)}\n")
             return "Executive summary generation timed out. Classification models processed successfully."

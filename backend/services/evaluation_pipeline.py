@@ -1,6 +1,7 @@
 import os
 import pickle
 import numpy as np
+import pandas as pd
 from backend.services.financial_checker import FinancialChecker
 from backend.services.document_parser import extract_text_from_pdf
 from ml.vector_store import LocalVectorStore
@@ -70,8 +71,9 @@ class EvaluationPipeline:
             "budget": float(budget if budget else 0.0),
             "tech_alignment": tech_alignment,
         }
-        feature_vector = np.array([[feature_values[f] for f in FEATURE_ORDER]])
 
+        feature_vector = pd.DataFrame([feature_values], columns=FEATURE_ORDER)
+        
         prediction_id = int(self.model.predict(feature_vector)[0])
         probabilities = self.model.predict_proba(feature_vector)[0]
         confidence_score = float(probabilities[prediction_id]) * 100

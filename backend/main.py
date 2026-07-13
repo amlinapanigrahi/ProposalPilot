@@ -3,6 +3,9 @@ from backend.database import engine, Base
 import backend.models  
 from backend.api.proposal_routes import router as proposal_router
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 

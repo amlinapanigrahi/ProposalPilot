@@ -24,12 +24,9 @@ TECHNICAL_EXEMPLARS = [
 
     "We design a randomized controlled trial with stratified sampling across "
     "three cohorts, using a mixed-effects regression model to control for "
-    "confounding variables and establish statistical significance."
+    "confounding variables and establish statistical significance.",
 ]
 
-# Reference snippets for financial feasibility sub-checks. Each represents
-# proposal language that properly addresses that dimension — similarity to
-# these, not keyword presence, is the signal.
 
 EQUIPMENT_EXEMPLARS = [
     "The requested funds will procure a GPU compute cluster, laboratory "
@@ -82,54 +79,53 @@ class LocalVectorStore:
     def load_history(self):
         """Loads past projects (title + abstract) as the novelty comparison baseline."""
         if not os.path.exists(self.csv_path) or os.stat(self.csv_path).st_size == 0:
-            print(f"No past_projects.csv, "
-                  f"novelty scoring will default to 100.")
+            print(f"No past_projects.csv, novelty scoring will default to 100.")
             return
 
         try:
             df = pd.read_csv(self.csv_path)
 
-            #fetch title from csv file
             if "title" in df.columns:
-                titles = df["titles"].fillna("")
+                titles = df["title"].fillna("")
             else:
-                titles = pd.Series([""]*len(df))
+                titles = pd.Series([""] * len(df))
 
-            #fetch abstract from csv file
             if "abstract" in df.columns:
                 abstract = df["abstract"].fillna("")
             else:
-                abstract = pd.Series([""]*len(df))
-         
+                abstract = pd.Series([""] * len(df))
 
             self.corpus_titles = titles.tolist()
             self.corpus_documents = (titles + ". " + abstract).tolist()
 
             if self.corpus_documents:
                 self.novelty_matrix = self.novelty_vectorizer.fit_transform(self.corpus_documents)
+                print(f"Loaded {len(self.corpus_documents)} past projects from {self.csv_path}.")
 
         except Exception as e:
-            print("Failed to load")
+            print(f"Failed to load {self.csv_path}: {e}")
             self.corpus_titles = []
             self.corpus_documents = []
             self.novelty_matrix = None
 
-    #fit and transform technical examplars
     def _fit_technical_corpus(self):
+        """Fits a separate vectorizer against curated strong-technical-writing exemplars."""
         self.technical_matrix = self.technical_vectorizer.fit_transform(TECHNICAL_EXEMPLARS)
 
-    #fit and transform financial examplars
     def _fit_financial_corpora(self):
+        """Fits separate vectorizers for each financial feasibility sub-check."""
         self.equipment_matrix = self.equipment_vectorizer.fit_transform(EQUIPMENT_EXEMPLARS)
         self.timeline_matrix = self.timeline_vectorizer.fit_transform(TIMELINE_EXEMPLARS)
         self.scalability_matrix = self.scalability_vectorizer.fit_transform(SCALABILITY_EXEMPLARS)
 
-    #runs novelty/techncial/financial analysis
     def analyze(self, target_text: str, top_n_similar: int = 3, top_n_keywords: int = 5) -> dict:
-
-        #transform target text into novelty vector
-        novelty_vec = self.novelty_vectorizer.transform([target_text])
-    
+        """Runs novelty/technical/similarity/keyword analysis in one pass.
+        Transforms target_text once per vectorizer, reuses the resulting
+        vector across every derived output."""
+        novelty_vec = (
+            self.novelty_vectorizer.transform([target_text])
+            if self.novelty_matrix is not None else None
+        )
         technical_vec = self.technical_vectorizer.transform([target_text])
 
         return {
@@ -140,7 +136,8 @@ class LocalVectorStore:
         }
 
     def compute_financial_context_scores(self, target_text: str) -> dict:
-        #return financial context scores relating to equipment, timeline and scalability
+        """Returns 0-100 similarity scores for equipment, timeline, and
+        scalability dimensions, based on similarity to curated exemplars."""
         return {
             "equipment_justification_score": self._corpus_similarity(
                 target_text, self.equipment_vectorizer, self.equipment_matrix
@@ -154,19 +151,24 @@ class LocalVectorStore:
         }
 
     def _corpus_similarity(self, target_text: str, vectorizer, matrix) -> float:
-        """Mean of the top-k cosine similarities against the reference corpus."""
+        """Transforms target_text, then scores it against a reference corpus.
+        Use when you don't already have a transformed vector."""
         target_vec = vectorizer.transform([target_text])
-        similarities = cosine_similarity(target_vec, matrix).flatten()
+        return self._corpus_similarity_from_vec(target_vec, matrix)
 
+    def _corpus_similarity_from_vec(self, target_vec, matrix) -> float:
+        """Mean of the top-k cosine similarities against a reference corpus,
+        given an ALREADY-TRANSFORMED vector. Shared by technical alignment
+        (called from analyze(), which pre-transforms) and all three
+        financial dimensions (called via _corpus_similarity above)."""
+        similarities = cosine_similarity(target_vec, matrix).flatten()
         k = min(3, len(similarities))
         top_k = np.sort(similarities)[-k:] if k > 0 else similarities
-
         score = float(np.mean(top_k)) * 100.0 if len(top_k) > 0 else 0.0
         return round(max(0.0, min(100.0, score)), 2)
 
-   #NOVELTY CALCULATION FROM VECTOR
     def _novelty_from_vec(self, target_vec) -> float:
-        #0-100: higher = less similar to any past proposal (more novel).
+        """0-100: higher = less similar to any past proposal (more novel)."""
         if target_vec is None or not self.corpus_documents:
             return 100.0
 
