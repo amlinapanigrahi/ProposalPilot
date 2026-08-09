@@ -1,6 +1,7 @@
 # ProposalPilot 🚀
 
 ### AI-Powered Proposal Evaluation & Decision Support System
+Demo video link: https://drive.google.com/file/d/1WzyLnX6OutsZL1mDqlsmLePzWSJVvbMP/view?usp=sharing
 
 ProposalPilot is an AI-assisted proposal evaluation platform that automates the assessment of research and R&D funding proposals. By combining Natural Language Processing (NLP), Machine Learning (ML), Explainable AI (XAI), and Large Language Models (LLMs), the system analyzes uploaded proposal documents and generates a structured evaluation report with transparent reasoning and actionable insights.
 
